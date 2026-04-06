@@ -22,3 +22,21 @@ class NexodimRobot(ABC):
     def disconnect(self):
         """연결 해제"""
         pass
+
+class NexodimPolicies(ABC):
+    """NxD 표준 규격 - 모든 vla는 이걸 따라야 함"""
+
+    @abstractmethod
+    def train_policy(self):
+        """train policy"""
+        pass
+
+    @abstractmethod
+    def validate_policy(self):
+        """validate policy"""
+        pass
+
+    @abstractmethod
+    def inference_policy(self, action):
+        """run policy"""
+        pass
