@@ -285,7 +285,7 @@ class SO101(NexodimRobot):
             return
 
         if save_dir is None:
-            save_dir = os.path.join(os.path.expanduser("~"), "projects", "data", task)
+            save_dir = os.path.join(os.path.expanduser("~"), "projects", "data", "so101", task)
         os.makedirs(save_dir, exist_ok=True)
 
         # 기존 에피소드 이어서
