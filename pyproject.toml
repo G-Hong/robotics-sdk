@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "nexodim"
@@ -9,3 +9,6 @@ requires-python = ">=3.10"
 dependencies = [
     "opencv-python",
 ]
+
+[tool.setuptools.packages.find]
+include = ["nexodim*"]
