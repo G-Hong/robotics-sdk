@@ -27,6 +27,11 @@ class NexodimPolicies(ABC):
     """NxD 표준 규격 - 모든 vla는 이걸 따라야 함"""
 
     @abstractmethod
+    def load_policy(self):
+        """load policy"""
+        pass
+
+    @abstractmethod
     def train_policy(self):
         """train policy"""
         pass
@@ -39,4 +44,9 @@ class NexodimPolicies(ABC):
     @abstractmethod
     def inference_policy(self, action):
         """run policy"""
+        pass
+
+    @abstractmethod
+    def save_policy(self):
+        """save policy"""
         pass
