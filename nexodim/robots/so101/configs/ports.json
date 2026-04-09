@@ -1,5 +1,4 @@
 {
   "follower": "/dev/ttyACM0",
-  "leader": "/dev/ttyACM1",
   "camera": 4
 }

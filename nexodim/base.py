@@ -23,8 +23,23 @@ class NexodimRobot(ABC):
         """연결 해제"""
         pass
 
+    @abstractmethod
+    def set_home_position(self):
+        """현재 위치를 home position으로 저장"""
+        pass
+
+    @abstractmethod
+    def go_home(self):
+        """저장된 home position 위치로 부드럽게 이동"""
+        pass
+
 class NexodimPolicies(ABC):
     """NxD 표준 규격 - 모든 vla는 이걸 따라야 함"""
+
+    @abstractmethod
+    def load_policy(self):
+        """load policy"""
+        pass
 
     @abstractmethod
     def train_policy(self):
@@ -39,4 +54,9 @@ class NexodimPolicies(ABC):
     @abstractmethod
     def inference_policy(self, action):
         """run policy"""
+        pass
+
+    @abstractmethod
+    def save_policy(self):
+        """save policy"""
         pass

@@ -8,3 +8,6 @@ venv/
 *.avi
 *.jpg
 *.png
+src/
+data/
+outputs/

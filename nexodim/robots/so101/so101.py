@@ -25,6 +25,7 @@ class SO101(NexodimRobot):
         self.camera = None
         self.robot_port = None
         self.leader_port = None
+        self.home_position = None
 
     # ── 내부 유틸 ──
 
@@ -137,6 +138,10 @@ class SO101(NexodimRobot):
                 self.camera_index = self._find_camera()
                 self.connect_camera()
 
+        # 설정 및 홈 포지션 불러오기
+        self.setup()
+        self._load_home_position()
+
         # 포트 저장
         self._save_ports()
 
@@ -226,6 +231,120 @@ class SO101(NexodimRobot):
         print(f"[{self.id}] 초기 셋업 완료!")
         self.disconnect()
 
+    # ── 홈 포지션 ──
+ 
+    def _home_position_path(self):
+        return os.path.join(os.path.dirname(__file__), "configs", "home_position.json")
+ 
+    def _load_home_position(self):
+        """저장된 홈 포지션을 파일에서 로드합니다."""
+        path = self._home_position_path()
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                self.home_position = json.load(f)
+            print(f"[{self.id}] 저장된 홈 포지션 로드 완료")
+        else:
+            self.home_position = None
+ 
+    def set_home_position(self, position=None):
+        """
+        홈 포지션을 설정합니다.
+ 
+        Args:
+            position: dict – 관절 위치. None이면 현재 위치를 홈으로 저장.
+                예) {"shoulder_pan.pos": 0, "shoulder_lift.pos": -90, ...}
+ 
+        사용법:
+            # 방법 1: 현재 위치를 홈으로 저장
+            robot.set_home_position()
+ 
+            # 방법 2: 직접 값 지정
+            robot.set_home_position({
+                "shoulder_pan.pos": 0.0,
+                "shoulder_lift.pos": -90.0,
+                "elbow_flex.pos": 90.0,
+                "wrist_flex.pos": 0.0,
+                "wrist_roll.pos": 0.0,
+                "gripper.pos": 0.0,
+            })
+        """
+        if position is not None:
+            self.home_position = position
+        else:
+            # 현재 관절 위치를 읽어서 홈으로 저장
+            obs = self.get_observation()
+            joint_names = [
+                "shoulder_pan", "shoulder_lift", "elbow_flex",
+                "wrist_flex", "wrist_roll", "gripper",
+            ]
+            self.home_position = {}
+            for name in joint_names:
+                key = f"{name}.pos"
+                if key in obs:
+                    self.home_position[key] = float(obs[key])
+ 
+        # 파일에 저장
+        path = self._home_position_path()
+        with open(path, "w") as f:
+            json.dump(self.home_position, f, indent=2)
+ 
+        print(f"[{self.id}] 홈 포지션 저장 완료:")
+        for k, v in self.home_position.items():
+            print(f"    {k}: {v:.2f}")
+ 
+    def go_home(self, duration=3.0, fps=60):
+        """
+        홈 포지션으로 부드럽게 이동합니다.
+ 
+        Args:
+            duration: 이동 시간 (초). 클수록 느리고 안전합니다.
+            fps:      보간 주파수
+        """
+        if self.home_position is None:
+            print(f"[{self.id}] 홈 포지션이 설정되지 않았습니다. set_home_position()을 먼저 호출하세요.")
+            return
+ 
+        if self.robot is None:
+            print(f"[{self.id}] 로봇이 연결되지 않았습니다.")
+            return
+ 
+        # 현재 위치 읽기
+        obs = self.get_observation()
+        joint_names = [
+            "shoulder_pan", "shoulder_lift", "elbow_flex",
+            "wrist_flex", "wrist_roll", "gripper",
+        ]
+ 
+        current = {}
+        for name in joint_names:
+            key = f"{name}.pos"
+            if key in obs:
+                current[key] = float(obs[key])
+ 
+        # 선형 보간으로 부드럽게 이동
+        total_steps = int(duration * fps)
+        interval = 1.0 / fps
+ 
+        print(f"[{self.id}] 홈 포지션으로 이동 중... ({duration}초)")
+ 
+        for step in range(1, total_steps + 1):
+            t = step / total_steps  # 0→1 진행률
+ 
+            # ease-in-out 보간 (더 부드러운 움직임)
+            t_smooth = t * t * (3.0 - 2.0 * t)
+ 
+            action = {}
+            for key in current:
+                if key in self.home_position:
+                    start = current[key]
+                    end = self.home_position[key]
+                    action[key] = start + (end - start) * t_smooth
+ 
+            self.send_action(action)
+            time.sleep(interval)
+ 
+        print(f"[{self.id}] 홈 포지션 도착!")        
+
     # ── 관측/제어 ──
 
     def get_observation(self):
@@ -285,7 +404,12 @@ class SO101(NexodimRobot):
             return
 
         if save_dir is None:
-            save_dir = os.path.join(os.path.expanduser("~"), "projects", "data", "so101", task)
+            # 현재 파일(so101.py)의 위치를 기준으로 3단계 위인 Zip0 루트 폴더를 자동으로 찾습니다.
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            zip0_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+            
+            # Zip0/data/so101/task 경로 설정
+            save_dir = os.path.join(zip0_root, "data", "so101", task)
         os.makedirs(save_dir, exist_ok=True)
 
         # 기존 에피소드 이어서
@@ -303,6 +427,9 @@ class SO101(NexodimRobot):
             server = Thread(target=self._start_preview_server, daemon=True)
             server.start()
             print(f"[{self.id}] 카메라 미리보기: http://localhost:5000")
+
+        import select
+        import termios
 
         for ep in range(start_ep, start_ep + episodes):
             ep_dir = os.path.join(save_dir, f"episode_{ep}")
@@ -323,14 +450,16 @@ class SO101(NexodimRobot):
             print(f"[{self.id}] 텔레옵 작동 중... 위치 잡으세요")
             print(f"[{self.id}] 엔터: 녹화 시작/종료")
 
-            # 녹화 대기 (텔레옵 유지)
-            import select
+            # 녹화 대기 (텔레옵 유지 및 버퍼 비우기)
+            termios.tcflush(sys.stdin, termios.TCIFLUSH)
             while True:
                 action = self.leader.get_action()
                 self.robot.send_action(action)
                 time.sleep(1/fps)
                 if select.select([sys.stdin], [], [], 0)[0]:
                     sys.stdin.readline()
+                    time.sleep(0.5)  # 중복 입력 방지
+                    termios.tcflush(sys.stdin, termios.TCIFLUSH)
                     break
 
             print(f"[{self.id}] 녹화 시작!")
@@ -342,7 +471,10 @@ class SO101(NexodimRobot):
                 self.robot.send_action(action)
 
                 obs = self.robot.get_observation()
-                joint_data.append(obs)
+                
+                # 메모리 폭발 방지: 카메라는 영상으로 저장하므로 관절 데이터에서 제외
+                joint_only_obs = {k: v for k, v in obs.items() if k != "camera"}
+                joint_data.append(joint_only_obs)
 
                 if self.camera and video_writer:
                     ret, frame = self.camera.read()
@@ -396,3 +528,10 @@ class SO101(NexodimRobot):
             print(f"[{self.id}] Main Robot 해제 완료")
         self.disconnect_leader()
         self.disconnect_camera()
+
+    def safe_disconnect(self, duration=3.0):
+        """홈 포지션으로 이동 후 안전하게 연결 해제합니다."""
+        if self.home_position is not None and self.robot is not None:
+            print(f"[{self.id}] 안전 종료: 홈 포지션으로 이동 중...")
+            self.go_home(duration=duration)
+        self.disconnect()
